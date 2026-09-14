@@ -1,4 +1,4 @@
-import { Category, Project, Meeting, NotificationItem } from '../types';
+import { Category, Project, Meeting, NotificationItem, AuthorizedUser } from '../types';
 
 export const CATEGORIES: Category[] = [
   {
@@ -988,3 +988,57 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     severity: 'info'
   }
 ];
+
+export const INITIAL_AUTHORIZED_USERS: AuthorizedUser[] = [
+  {
+    id: 'user-01',
+    name: 'นพ.เกรียงศักดิ์ ธรรมรัตน์',
+    position: 'ผู้อำนวยการโรงพยาบาล / ประธานกรรมการ GCH',
+    department: 'คณะกรรมการบริหารโรงพยาบาล',
+    allowedLevels: ['3', '4', '5'],
+    createdAt: '1 ก.ค. 2569',
+    status: 'active',
+    note: 'ผู้บริหารสูงสุด / ประธานอนุมัติโครงการและรับรองระดับ 4-5'
+  },
+  {
+    id: 'user-02',
+    name: 'นพ.สมศักดิ์ ปรีชาชาญ',
+    position: 'รองผู้อำนวยการฝ่ายการแพทย์ / ประธานที่ประชุม',
+    department: 'กลุ่มงานการแพทย์และพัฒนาคุณภาพ',
+    allowedLevels: ['3', '4', '5'],
+    createdAt: '1 ก.ค. 2569',
+    status: 'active',
+    note: 'ประธานคณะกรรมการตรวจประเมิน GCH'
+  },
+  {
+    id: 'user-03',
+    name: 'นางสาวกานดา สุวรรณฉัตร',
+    position: 'นักวิชาการสาธารณสุขชำนาญการ / เลขานุการ GCH',
+    department: 'กลุ่มงานบริหารสิ่งแวดล้อมและอาชีวอนามัย',
+    allowedLevels: ['1', '2'],
+    createdAt: '1 ก.ค. 2569',
+    status: 'active',
+    note: 'ผู้รับผิดชอบงาน Zero Waste และเลขานุการคณะกรรมการ'
+  },
+  {
+    id: 'user-04',
+    name: 'นายพิชัย เกียรติสกุล',
+    position: 'นายช่างเทคนิคชำนาญงาน',
+    department: 'กลุ่มงานบริหารทั่วไปและซ่อมบำรุง',
+    allowedLevels: ['1'],
+    createdAt: '1 ก.ค. 2569',
+    status: 'active',
+    note: 'ผู้รับผิดชอบโครงการ Solar Rooftop และประหยัดพลังงาน'
+  },
+  {
+    id: 'user-05',
+    name: 'ผู้ดูแลระบบไอที (Super Admin)',
+    position: 'นักวิชาการคอมพิวเตอร์ / ผู้ดูแลระบบ GCH',
+    department: 'ศูนย์เทคโนโลยีสารสนเทศทางการแพทย์',
+    allowedLevels: ['admin', '1', '2', '3', '4', '5'],
+    createdAt: '1 ก.ค. 2569',
+    status: 'active',
+    note: 'ผู้ดูแลระบบสูงสุด สิทธิ์จัดการข้อมูลทั้งหมด รหัสผ่าน 353909'
+  }
+];
+

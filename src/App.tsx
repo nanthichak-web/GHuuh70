@@ -3,29 +3,53 @@ import {
   CATEGORIES,
   INITIAL_PROJECTS,
   INITIAL_MEETINGS,
-  INITIAL_NOTIFICATIONS
+  INITIAL_NOTIFICATIONS,
+  INITIAL_AUTHORIZED_USERS
 } from './data/initialData';
-import { Project, Category, Meeting, NotificationItem, UserRole, StatusType, EvidenceItem, MeetingResolution } from './types';
+import {
+  Project,
+  Category,
+  Meeting,
+  NotificationItem,
+  UserRole,
+  StatusType,
+  EvidenceItem,
+  MeetingResolution,
+  AuthorizedUser,
+  AccessLogEntry,
+  UserSession
+} from './types';
 import { Navbar } from './components/Navbar';
 import { DashboardView } from './components/DashboardView';
 import { CategoryListView } from './components/CategoryListView';
 import { ProjectsView } from './components/ProjectsView';
 import { EvidenceMatrixView } from './components/EvidenceMatrixView';
 import { MeetingTrackingView } from './components/MeetingTrackingView';
+import { AdminConsoleView } from './components/AdminConsoleView';
 import { ProjectDetailModal } from './components/ProjectDetailModal';
 import { NewProjectModal } from './components/NewProjectModal';
 import { NewMeetingModal } from './components/NewMeetingModal';
 import { EvidenceLightboxModal } from './components/EvidenceLightboxModal';
 import { ReportPrintModal } from './components/ReportPrintModal';
+import { LoginModal } from './components/LoginModal';
+import { EditProjectModal } from './components/EditProjectModal';
 import {
   testFirestoreConnection,
   seedInitialDataIfEmpty,
   subscribeToProjects,
   subscribeToMeetings,
   subscribeToNotifications,
+  subscribeToAuthorizedUsers,
+  subscribeToAccessLogs,
   saveProjectToFirestore,
   saveMeetingToFirestore,
   saveNotificationToFirestore,
+  saveAuthorizedUserToFirestore,
+  deleteAuthorizedUserFromFirestore,
+  deleteAccessLogFromFirestore,
+  clearAccessLogsFromFirestore,
+  deleteProjectFromFirestore,
+  deleteMeetingFromFirestore,
   markNotificationReadInFirestore
 } from './lib/firebase';
 
@@ -35,6 +59,21 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [meetings, setMeetings] = useState<Meeting[]>(INITIAL_MEETINGS);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [authorizedUsers, setAuthorizedUsers] = useState<AuthorizedUser[]>(INITIAL_AUTHORIZED_USERS);
+  const [accessLogs, setAccessLogs] = useState<AccessLogEntry[]>([]);
+
+  // User Session & Security States
+  const [currentSession, setCurrentSession] = useState<UserSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('gch_user_session');
+      if (saved) return JSON.parse(saved) as UserSession;
+    } catch (e) {
+      console.warn('Failed reading session from localStorage:', e);
+    }
+    return null;
+  });
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [editingProjectForAdmin, setEditingProjectForAdmin] = useState<Project | null>(null);
 
   // Cloud Real-time Sync States
   const [cloudConnected, setCloudConnected] = useState<boolean>(true);
@@ -42,7 +81,18 @@ export default function App() {
 
   // Navigation & Role States
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [activeRole, setActiveRole] = useState<UserRole>('senior_exec');
+  const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    try {
+      const saved = localStorage.getItem('gch_user_session');
+      if (saved) {
+        const parsed = JSON.parse(saved) as UserSession;
+        if (parsed.role) return parsed.role;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 'senior_exec';
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [projectListFilterStatus, setProjectListFilterStatus] = useState<StatusType | undefined>(undefined);
@@ -60,6 +110,8 @@ export default function App() {
     let unsubProjects: (() => void) | undefined;
     let unsubMeetings: (() => void) | undefined;
     let unsubNotifications: (() => void) | undefined;
+    let unsubUsers: (() => void) | undefined;
+    let unsubLogs: (() => void) | undefined;
 
     async function initCloudDatabase() {
       try {
@@ -88,6 +140,18 @@ export default function App() {
               setNotifications(cloudNotifs);
             }
           });
+
+          unsubUsers = subscribeToAuthorizedUsers((cloudUsers) => {
+            if (cloudUsers && cloudUsers.length > 0) {
+              setAuthorizedUsers(cloudUsers);
+            }
+          });
+
+          unsubLogs = subscribeToAccessLogs((cloudLogs) => {
+            if (cloudLogs) {
+              setAccessLogs(cloudLogs);
+            }
+          });
         } else {
           setIsSyncing(false);
         }
@@ -103,6 +167,8 @@ export default function App() {
       if (unsubProjects) unsubProjects();
       if (unsubMeetings) unsubMeetings();
       if (unsubNotifications) unsubNotifications();
+      if (unsubUsers) unsubUsers();
+      if (unsubLogs) unsubLogs();
     };
   }, []);
 
@@ -294,19 +360,112 @@ export default function App() {
     }
   };
 
+  // Login & Logout Handlers
+  const handleLoginSuccess = (session: UserSession) => {
+    setCurrentSession(session);
+    setActiveRole(session.role);
+    setShowLoginModal(false);
+    if (session.level === 'admin') {
+      setCurrentTab('admin');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentSession(null);
+    try {
+      localStorage.removeItem('gch_user_session');
+    } catch (e) {
+      console.warn('Cannot remove session from localStorage:', e);
+    }
+    setActiveRole('officer');
+  };
+
+  // Admin CRUD Handlers
+  const handleSaveAuthorizedUser = async (user: AuthorizedUser) => {
+    setAuthorizedUsers(prev => {
+      const exists = prev.some(u => u.id === user.id);
+      if (exists) return prev.map(u => (u.id === user.id ? user : u));
+      return [...prev, user];
+    });
+    try {
+      await saveAuthorizedUserToFirestore(user);
+    } catch (err) {
+      console.error('Failed saving user to Firestore:', err);
+    }
+  };
+
+  const handleDeleteAuthorizedUser = async (userId: string) => {
+    setAuthorizedUsers(prev => prev.filter(u => u.id !== userId));
+    try {
+      await deleteAuthorizedUserFromFirestore(userId);
+    } catch (err) {
+      console.error('Failed deleting user from Firestore:', err);
+    }
+  };
+
+  const handleDeleteAccessLog = async (logId: string) => {
+    setAccessLogs(prev => prev.filter(l => l.id !== logId));
+    try {
+      await deleteAccessLogFromFirestore(logId);
+    } catch (err) {
+      console.error('Failed deleting access log:', err);
+    }
+  };
+
+  const handleClearAccessLogs = async () => {
+    const toDelete = [...accessLogs];
+    setAccessLogs([]);
+    try {
+      await clearAccessLogsFromFirestore(toDelete);
+    } catch (err) {
+      console.error('Failed clearing access logs:', err);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    if (selectedProject?.id === projectId) setSelectedProject(null);
+    if (editingProjectForAdmin?.id === projectId) setEditingProjectForAdmin(null);
+    try {
+      await deleteProjectFromFirestore(projectId);
+    } catch (err) {
+      console.error('Failed deleting project from Firestore:', err);
+    }
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    setMeetings(prev => prev.filter(m => m.id !== meetingId));
+    try {
+      await deleteMeetingFromFirestore(meetingId);
+    } catch (err) {
+      console.error('Failed deleting meeting from Firestore:', err);
+    }
+  };
+
+  const isAdminActive = activeRole === 'admin' || currentSession?.level === 'admin';
+
   return (
     <div className="min-h-screen bg-slate-50/80 text-slate-800 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
       
-      {/* Persistent Navigation Bar with Role Switcher & Notifications */}
+      {/* Persistent Navigation Bar with Role Switcher, Session & Notifications */}
       <Navbar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         activeRole={activeRole}
-        setActiveRole={setActiveRole}
+        setActiveRole={(role) => {
+          setActiveRole(role);
+          if (role === 'admin' && currentSession?.level !== 'admin') {
+            // Prompt login for admin password if not logged in as admin
+            setShowLoginModal(true);
+          }
+        }}
         notifications={notifications}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
         cloudConnected={cloudConnected}
         isSyncing={isSyncing}
+        currentSession={currentSession}
+        onOpenLoginModal={() => setShowLoginModal(true)}
+        onLogout={handleLogout}
         onOpenNewProjectModal={() => {
           setNewProjectCategoryPrefill(undefined);
           setShowNewProjectModal(true);
@@ -393,6 +552,26 @@ export default function App() {
           />
         )}
 
+        {/* TAB 6: ADMIN CONTROL CONSOLE & ACCESS REGISTRY */}
+        {currentTab === 'admin' && (
+          <AdminConsoleView
+            accessLogs={accessLogs}
+            authorizedUsers={authorizedUsers}
+            projects={projects}
+            meetings={meetings}
+            categories={categories}
+            isAdmin={isAdminActive}
+            onSaveAuthorizedUser={handleSaveAuthorizedUser}
+            onDeleteAuthorizedUser={handleDeleteAuthorizedUser}
+            onDeleteAccessLog={handleDeleteAccessLog}
+            onClearAccessLogs={handleClearAccessLogs}
+            onEditProject={(proj) => setEditingProjectForAdmin(proj)}
+            onDeleteProject={handleDeleteProject}
+            onDeleteMeeting={handleDeleteMeeting}
+            onOpenLoginModal={() => setShowLoginModal(true)}
+          />
+        )}
+
       </main>
 
       {/* Footer */}
@@ -455,6 +634,32 @@ export default function App() {
           categories={categories}
           meetings={meetings}
           onClose={() => setShowPrintModal(false)}
+        />
+      )}
+
+      {/* Login / Authentication Modal */}
+      {showLoginModal && (
+        <LoginModal
+          onClose={() => setShowLoginModal(false)}
+          onLoginSuccess={handleLoginSuccess}
+          authorizedUsers={authorizedUsers}
+        />
+      )}
+
+      {/* Admin Edit Project Modal */}
+      {editingProjectForAdmin && (
+        <EditProjectModal
+          project={editingProjectForAdmin}
+          categories={categories}
+          onClose={() => setEditingProjectForAdmin(null)}
+          onSave={(updatedProject) => {
+            handleUpdateProject(updatedProject);
+            setEditingProjectForAdmin(null);
+          }}
+          onDelete={(projectId) => {
+            handleDeleteProject(projectId);
+            setEditingProjectForAdmin(null);
+          }}
         />
       )}
 

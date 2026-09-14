@@ -1,4 +1,4 @@
-import { StatusType, WorkflowLevel, UserRole } from '../types';
+import { StatusType, WorkflowLevel, UserRole, AccessLevel } from '../types';
 
 export function getStatusConfig(status: StatusType) {
   switch (status) {
@@ -139,6 +139,73 @@ export function getUserRoleLabel(role: UserRole): string {
       return '🏥 ผู้บริหารขั้นสูง (ผอ./รอง ผอ.)';
     case 'evaluator':
       return '📋 ผู้ประเมินภายนอก (กรรมการ GCH)';
+    case 'admin':
+      return '👑 ผู้ดูแลระบบสูงสุด (Super Admin)';
+  }
+}
+
+export function getAccessLevelConfig(level: AccessLevel) {
+  switch (level) {
+    case '1':
+      return {
+        level: '1' as AccessLevel,
+        title: 'ระดับ 1: ผู้รับผิดชอบงาน',
+        shortTitle: 'ระดับ 1 (ผู้รับผิดชอบ)',
+        role: 'officer' as UserRole,
+        passwordHint: '01',
+        iconEmoji: '👤',
+        badgeClass: 'bg-sky-50 text-sky-700 border-sky-200'
+      };
+    case '2':
+      return {
+        level: '2' as AccessLevel,
+        title: 'ระดับ 2: ผู้รับรอง / หัวหน้างาน',
+        shortTitle: 'ระดับ 2 (ผู้รับรอง)',
+        role: 'supervisor' as UserRole,
+        passwordHint: '012',
+        iconEmoji: '👨‍💼',
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200'
+      };
+    case '3':
+      return {
+        level: '3' as AccessLevel,
+        title: 'ระดับ 3: ผู้บริหารขั้นต้น',
+        shortTitle: 'ระดับ 3 (ผู้บริหารขั้นต้น)',
+        role: 'middle_exec' as UserRole,
+        passwordHint: '0123',
+        iconEmoji: '👔',
+        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      };
+    case '4':
+      return {
+        level: '4' as AccessLevel,
+        title: 'ระดับ 4: ผู้บริหารขั้นสูง (ผอ./รอง ผอ.)',
+        shortTitle: 'ระดับ 4 (ผู้บริหารขั้นสูง)',
+        role: 'senior_exec' as UserRole,
+        passwordHint: '01234',
+        iconEmoji: '🏥',
+        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200'
+      };
+    case '5':
+      return {
+        level: '5' as AccessLevel,
+        title: 'ระดับ 5: รับรองสมบูรณ์ / ปิดงาน / กรรมการ GCH',
+        shortTitle: 'ระดับ 5 (รับรองสมบูรณ์)',
+        role: 'evaluator' as UserRole,
+        passwordHint: '012345',
+        iconEmoji: '✅',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      };
+    case 'admin':
+      return {
+        level: 'admin' as AccessLevel,
+        title: '👑 ผู้ดูแลระบบสูงสุด (Super Admin)',
+        shortTitle: 'Admin (ผู้ดูแลระบบ)',
+        role: 'admin' as UserRole,
+        passwordHint: '353909',
+        iconEmoji: '👑',
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200'
+      };
   }
 }
 

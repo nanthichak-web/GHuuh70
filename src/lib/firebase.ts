@@ -5,16 +5,20 @@ import {
   doc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   getDocs,
   getDocFromServer,
-  writeBatch
+  writeBatch,
+  query,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Project, Meeting, NotificationItem } from '../types';
-import { INITIAL_PROJECTS, INITIAL_MEETINGS, INITIAL_NOTIFICATIONS } from '../data/initialData';
+import { Project, Meeting, NotificationItem, AuthorizedUser, AccessLogEntry } from '../types';
+import { INITIAL_PROJECTS, INITIAL_MEETINGS, INITIAL_NOTIFICATIONS, INITIAL_AUTHORIZED_USERS } from '../data/initialData';
 
 // Initialize Firebase App
 export const app = initializeApp(firebaseConfig);
@@ -97,8 +101,26 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
         batch.set(docRef, cleanFirestoreData(notif));
       });
 
+      // Seed authorized users
+      INITIAL_AUTHORIZED_USERS.forEach(user => {
+        const docRef = doc(db, 'authorized_users', user.id);
+        batch.set(docRef, cleanFirestoreData(user));
+      });
+
       await batch.commit();
       console.log('Cloud database initialized with Green & Clean Hospital seed data successfully.');
+    } else {
+      // Also check if authorized_users is empty
+      const usersSnap = await getDocs(collection(db, 'authorized_users'));
+      if (usersSnap.empty) {
+        const batchUsers = writeBatch(db);
+        INITIAL_AUTHORIZED_USERS.forEach(user => {
+          const docRef = doc(db, 'authorized_users', user.id);
+          batchUsers.set(docRef, cleanFirestoreData(user));
+        });
+        await batchUsers.commit();
+        console.log('Authorized users initialized in Cloud Firestore.');
+      }
     }
   } catch (err) {
     console.error('Error checking/seeding Firestore initial data:', err);
@@ -273,5 +295,151 @@ export async function uploadEvidenceFile(
       };
       reader.readAsDataURL(file);
     });
+  }
+}
+
+/**
+ * Delete Project from Firestore
+ */
+export async function deleteProjectFromFirestore(projectId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'projects', projectId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Error deleting project from Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete Meeting from Firestore
+ */
+export async function deleteMeetingFromFirestore(meetingId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'meetings', meetingId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Error deleting meeting from Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Subscribe to Authorized Users
+ */
+export function subscribeToAuthorizedUsers(callback: (users: AuthorizedUser[]) => void): () => void {
+  const usersRef = collection(db, 'authorized_users');
+  return onSnapshot(
+    usersRef,
+    (snapshot) => {
+      const users: AuthorizedUser[] = [];
+      snapshot.forEach((docSnap) => {
+        users.push(docSnap.data() as AuthorizedUser);
+      });
+      callback(users);
+    },
+    (error) => {
+      console.error('Error in authorized_users subscription:', error);
+      callback(INITIAL_AUTHORIZED_USERS);
+    }
+  );
+}
+
+/**
+ * Save / Update Authorized User in Firestore
+ */
+export async function saveAuthorizedUserToFirestore(user: AuthorizedUser): Promise<void> {
+  try {
+    const docRef = doc(db, 'authorized_users', user.id);
+    const cleaned = cleanFirestoreData(user);
+    await setDoc(docRef, cleaned, { merge: true });
+  } catch (err) {
+    console.error('Error saving authorized user to Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete Authorized User from Firestore
+ */
+export async function deleteAuthorizedUserFromFirestore(userId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'authorized_users', userId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Error deleting authorized user from Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Record Access / Login Log in Firestore
+ */
+export async function recordAccessLog(log: AccessLogEntry): Promise<void> {
+  try {
+    const docRef = doc(db, 'access_logs', log.id);
+    const cleaned = cleanFirestoreData(log);
+    await setDoc(docRef, cleaned);
+  } catch (err) {
+    console.error('Error recording access log to Firestore:', err);
+  }
+}
+
+/**
+ * Subscribe to Access Logs (ordered by timestamp descending)
+ */
+export function subscribeToAccessLogs(callback: (logs: AccessLogEntry[]) => void): () => void {
+  const logsRef = collection(db, 'access_logs');
+  const q = query(logsRef, orderBy('timestampMs', 'desc'), limit(150));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const logs: AccessLogEntry[] = [];
+      snapshot.forEach((docSnap) => {
+        logs.push(docSnap.data() as AccessLogEntry);
+      });
+      callback(logs);
+    },
+    (error) => {
+      console.warn('Falling back to un-ordered access_logs query (no index needed yet):', error);
+      // Fallback in case orderBy requires composite index
+      const unsub = onSnapshot(collection(db, 'access_logs'), (snap) => {
+        const logs: AccessLogEntry[] = [];
+        snap.forEach((d) => logs.push(d.data() as AccessLogEntry));
+        logs.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
+        callback(logs);
+      });
+      return unsub;
+    }
+  );
+}
+
+/**
+ * Delete Access Log from Firestore
+ */
+export async function deleteAccessLogFromFirestore(logId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'access_logs', logId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Error deleting access log from Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Clear All Access Logs from Firestore
+ */
+export async function clearAccessLogsFromFirestore(logs: AccessLogEntry[]): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+    logs.forEach((log) => {
+      const docRef = doc(db, 'access_logs', log.id);
+      batch.delete(docRef);
+    });
+    await batch.commit();
+  } catch (err) {
+    console.error('Error clearing access logs:', err);
+    throw err;
   }
 }

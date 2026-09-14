@@ -46,6 +46,38 @@
         "isRead": { "type": "boolean" }
       },
       "required": ["id", "title", "message", "isRead"]
+    },
+    "AuthorizedUser": {
+      "title": "Authorized Personnel",
+      "description": "Registered committee members or personnel permitted to access the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "department": { "type": "string" },
+        "allowedLevels": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "AccessLogEntry": {
+      "title": "Access and Login Log",
+      "description": "Audit trail recording which user logged in and their access level and timestamp",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userName": { "type": "string" },
+        "level": { "type": "string" },
+        "levelLabel": { "type": "string" },
+        "loginTime": { "type": "string" },
+        "timestampMs": { "type": "number" },
+        "deviceInfo": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userName", "level", "loginTime"]
     }
   },
   "firestore": {
@@ -60,6 +92,14 @@
     "/notifications/{notificationId}": {
       "schema": "NotificationItem",
       "description": "Collection of notifications"
+    },
+    "/authorized_users/{userId}": {
+      "schema": "AuthorizedUser",
+      "description": "Collection of authorized users managed by admin"
+    },
+    "/access_logs/{logId}": {
+      "schema": "AccessLogEntry",
+      "description": "Collection of access/login history logs"
     }
   }
 }

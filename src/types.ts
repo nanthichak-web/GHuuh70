@@ -14,11 +14,53 @@ export type WorkflowLevel = 1 | 2 | 3 | 4 | 5;
 // Level 5: ✅ รับรองเสร็จสมบูรณ์/ปิดงาน (Completed & Certified)
 
 export type UserRole =
-  | 'officer'        // ผู้รับผิดชอบ
-  | 'supervisor'     // ผู้รับรอง / หัวหน้างาน
-  | 'middle_exec'    // ผู้บริหารขั้นต้น
-  | 'senior_exec'    // ผู้บริหารขั้นสูง
-  | 'evaluator';     // ผู้ประเมินภายนอก / กรรมการ GCH
+  | 'officer'        // ผู้รับผิดชอบ (ระดับ 1)
+  | 'supervisor'     // ผู้รับรอง / หัวหน้างาน (ระดับ 2)
+  | 'middle_exec'    // ผู้บริหารขั้นต้น (ระดับ 3)
+  | 'senior_exec'    // ผู้บริหารขั้นสูง (ระดับ 4)
+  | 'evaluator'      // ผู้ประเมินภายนอก / กรรมการ GCH (ระดับ 5)
+  | 'admin';         // ผู้ดูแลระบบสูงสุด (Admin)
+
+export type AccessLevel = '1' | '2' | '3' | '4' | '5' | 'admin';
+
+export const LEVEL_PASSWORDS: Record<AccessLevel, string> = {
+  '1': '01',
+  '2': '012',
+  '3': '0123',
+  '4': '01234',
+  '5': '012345',
+  'admin': '353909'
+};
+
+export interface AuthorizedUser {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  allowedLevels: AccessLevel[];
+  createdAt: string;
+  status: 'active' | 'suspended';
+  note?: string;
+}
+
+export interface AccessLogEntry {
+  id: string;
+  userName: string;
+  level: AccessLevel;
+  levelLabel: string;
+  loginTime: string;
+  timestampMs: number;
+  deviceInfo?: string;
+  status: 'success' | 'failed';
+}
+
+export interface UserSession {
+  userName: string;
+  level: AccessLevel;
+  levelLabel: string;
+  loginTime: string;
+  role: UserRole;
+}
 
 export interface Category {
   id: string;

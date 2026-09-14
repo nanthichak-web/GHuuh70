@@ -12,10 +12,15 @@ import {
   Calendar,
   Layers,
   FileCheck,
-  FolderKanban
+  FolderKanban,
+  ShieldAlert,
+  KeyRound,
+  LogOut,
+  User,
+  Shield
 } from 'lucide-react';
-import { UserRole, NotificationItem } from '../types';
-import { getUserRoleLabel } from '../utils/helpers';
+import { UserRole, NotificationItem, UserSession } from '../types';
+import { getUserRoleLabel, getAccessLevelConfig } from '../utils/helpers';
 
 interface NavbarProps {
   currentTab: string;
@@ -30,6 +35,9 @@ interface NavbarProps {
   setSearchQuery: (q: string) => void;
   cloudConnected?: boolean;
   isSyncing?: boolean;
+  currentSession: UserSession | null;
+  onOpenLoginModal: () => void;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -44,10 +52,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   setSearchQuery,
   cloudConnected = true,
-  isSyncing = false
+  isSyncing = false,
+  currentSession,
+  onOpenLoginModal,
+  onLogout
 }) => {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -76,6 +88,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       role: 'evaluator',
       title: '📋 ระดับ 5: ผู้ประเมินภายนอก (กรรมการ GCH)',
       desc: 'ตรวจ Evidence Matrix และรับรองมาตรฐาน'
+    },
+    {
+      role: 'admin',
+      title: '👑 ผู้ดูแลระบบสูงสุด (Super Admin)',
+      desc: 'จัดการข้อมูลทุกอย่าง ทะเบียนผู้ใช้งาน และสิทธิ์'
     }
   ];
 
@@ -161,6 +178,98 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
 
+            {/* User Session / Login Button */}
+            <div className="relative">
+              {currentSession ? (
+                <div>
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50/90 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 transition-colors shadow-2xs"
+                    title={`เข้าสู่ระบบในชื่อ: ${currentSession.userName} (${currentSession.levelLabel})`}
+                  >
+                    <div className="w-5 h-5 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold">
+                      {currentSession.level === 'admin' ? '👑' : currentSession.level}
+                    </div>
+                    <span className="max-w-[100px] sm:max-w-[140px] truncate text-slate-800">
+                      {currentSession.userName}
+                    </span>
+                    <span className="hidden md:inline-block px-1.5 py-0.2 rounded text-[10px] bg-white border border-emerald-300 text-emerald-800 font-bold">
+                      {currentSession.level === 'admin' ? 'Admin' : `ระดับ ${currentSession.level}`}
+                    </span>
+                    <ChevronDown className="w-3 h-3 text-emerald-700" />
+                  </button>
+
+                  {showUserMenu && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="px-3.5 py-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                            {currentSession.userName.charAt(0)}
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {currentSession.userName}
+                            </p>
+                            <p className="text-[11px] text-emerald-700 truncate font-medium">
+                              {currentSession.levelLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-[10px] text-slate-400">
+                          เข้าใช้งานเมื่อ: {currentSession.loginTime}
+                        </div>
+                      </div>
+
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setCurrentTab('admin');
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                          <span>ศูนย์ควบคุม Admin & ทะเบียนผู้ใช้งาน</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            onOpenLoginModal();
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                        >
+                          <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                          <span>สลับระดับสิทธิ / เข้าสู่ระบบด้วยชื่ออื่น</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            onLogout();
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>ออกจากระบบ</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={onOpenLoginModal}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-all shadow-2xs"
+                  title="ลงชื่อเข้าใช้งานตามระดับ 1-5 หรือ Admin"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-700" />
+                  <span className="hidden sm:inline">ลงชื่อเข้าใช้งาน</span>
+                  <span className="sm:hidden">เข้าสู่ระบบ</span>
+                </button>
+              )}
+            </div>
+
             {/* Role Switcher */}
             <div className="relative">
               <button
@@ -168,7 +277,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-300 bg-slate-50/80 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
                 title="สลับมุมมองบทบาท (Role Switcher)"
               >
-                <span className="max-w-[130px] sm:max-w-none truncate">
+                <span className="max-w-[110px] sm:max-w-none truncate">
                   {getUserRoleLabel(activeRole)}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
@@ -344,6 +453,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>📅 ติดตามการประชุม (Resolutions)</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('admin')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
+              currentTab === 'admin'
+                ? 'bg-rose-700 text-white font-bold shadow-xs ring-2 ring-rose-300'
+                : 'text-rose-700 bg-rose-50/80 hover:bg-rose-100 border border-rose-200/80 font-semibold'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>👑 ศูนย์ควบคุม Admin & ทะเบียน</span>
           </button>
         </nav>
       </div>
