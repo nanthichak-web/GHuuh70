@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Green Hospital Project",
+      "description": "A green hospital initiative project with status, budget, evidence, and audit timeline",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "department": { "type": "string" },
+        "responsiblePerson": { "type": "string" },
+        "status": { "type": "string" },
+        "approvalLevel": { "type": "number" },
+        "progress": { "type": "number" },
+        "budget": { "type": "number" },
+        "spent": { "type": "number" },
+        "startDate": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name", "categoryId", "status", "progress"]
+    },
+    "Meeting": {
+      "title": "Green Hospital Meeting",
+      "description": "Meeting record and resolutions for Green & Clean Hospital Committee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "meetingNumber": { "type": "string" },
+        "attendeesCount": { "type": "number" }
+      },
+      "required": ["id", "title", "date"]
+    },
+    "NotificationItem": {
+      "title": "Notification Item",
+      "description": "System alert or workflow notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "date": { "type": "string" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["id", "title", "message", "isRead"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Collection of green hospital projects"
+    },
+    "/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "Collection of hospital committee meetings and resolutions"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "NotificationItem",
+      "description": "Collection of notifications"
+    }
+  }
+}

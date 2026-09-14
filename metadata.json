@@ -1,0 +1,6 @@
+{
+  "name": "GREEN CARE TRACK",
+  "description": "ระบบติดตามและรายงานผลการดำเนินงาน Green & Clean Hospital (GCH Progress Tracking System)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
