@@ -178,7 +178,7 @@ export const AdminConsoleView: React.FC<AdminConsoleViewProps> = ({
                 className="py-2 px-4 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors shadow-md flex items-center gap-1.5"
               >
                 <KeyRound className="w-4 h-4" />
-                <span>เข้าสู่ระบบด้วยรหัส Admin (353909)</span>
+                <span>เข้าสู่ระบบด้วยสิทธิ์ Admin</span>
               </button>
             ) : (
               <span className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">

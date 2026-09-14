@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Clock,
@@ -20,16 +20,37 @@ import {
   Trees,
   Building2,
   Users,
-  BarChart3
+  BarChart3,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff,
+  UserCheck,
+  Shield
 } from 'lucide-react';
-import { Project, Category, Meeting, UserRole, StatusType } from '../types';
-import { getStatusConfig, getWorkflowLevelInfo } from '../utils/helpers';
+import {
+  Project,
+  Category,
+  Meeting,
+  UserRole,
+  StatusType,
+  UserSession,
+  AuthorizedUser,
+  AccessLevel,
+  LEVEL_PASSWORDS
+} from '../types';
+import { getStatusConfig, getWorkflowLevelInfo, getAccessLevelConfig } from '../utils/helpers';
+import { recordAccessLog } from '../lib/firebase';
 
 interface DashboardViewProps {
   projects: Project[];
   categories: Category[];
   meetings: Meeting[];
   activeRole: UserRole;
+  currentSession: UserSession | null;
+  authorizedUsers: AuthorizedUser[];
+  onLoginSuccess: (session: UserSession) => void;
+  onOpenLoginModal?: () => void;
   onSelectProject: (p: Project) => void;
   onSelectCategory: (catId: string) => void;
   onNavigateToTab: (tab: string, filterStatus?: StatusType) => void;
@@ -40,10 +61,87 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   categories,
   meetings,
   activeRole,
+  currentSession,
+  authorizedUsers,
+  onLoginSuccess,
+  onOpenLoginModal,
   onSelectProject,
   onSelectCategory,
   onNavigateToTab
 }) => {
+  // Executive Quick Login Form State (on-dashboard)
+  const [execLevel, setExecLevel] = useState<AccessLevel>('4');
+  const [execUserId, setExecUserId] = useState<string>('');
+  const [execCustomName, setExecCustomName] = useState<string>('');
+  const [execPassword, setExecPassword] = useState<string>('');
+  const [showExecPassword, setShowExecPassword] = useState<boolean>(false);
+  const [execLoginError, setExecLoginError] = useState<string>('');
+  const [isSubmittingExecLogin, setIsSubmittingExecLogin] = useState<boolean>(false);
+
+  const isExecutiveUser = currentSession && ['3', '4', '5', 'admin'].includes(currentSession.level);
+
+  // Handle Executive Sign-in from dashboard
+  const handleExecLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setExecLoginError('');
+
+    let nameToUse = execCustomName.trim();
+    if (execUserId) {
+      const found = authorizedUsers.find(u => u.id === execUserId);
+      if (found) nameToUse = found.name;
+    }
+
+    if (!nameToUse) {
+      setExecLoginError('กรุณาเลือกรายชื่อผู้บริหาร หรือระบุชื่อ-นามสกุล');
+      return;
+    }
+
+    const expectedPwd = LEVEL_PASSWORDS[execLevel];
+    if (execPassword !== expectedPwd) {
+      setExecLoginError(`รหัสผ่านไม่ถูกต้อง สำหรับ${getAccessLevelConfig(execLevel).shortTitle} กรุณาตรวจสอบรหัสผ่านอีกครั้ง`);
+      return;
+    }
+
+    setIsSubmittingExecLogin(true);
+    try {
+      const now = new Date();
+      const thaiDateStr = `${now.toLocaleDateString('th-TH', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })} เวลา ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
+
+      const levelConfig = getAccessLevelConfig(execLevel);
+      const session: UserSession = {
+        userName: nameToUse,
+        level: execLevel,
+        levelLabel: levelConfig.title,
+        loginTime: thaiDateStr,
+        role: levelConfig.role
+      };
+
+      // Record access log
+      const logEntry = {
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        userName: nameToUse,
+        level: execLevel,
+        levelLabel: levelConfig.title,
+        loginTime: thaiDateStr,
+        timestampMs: Date.now(),
+        deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent.split(')')[0] + ')' : 'Web Client',
+        status: 'success' as const
+      };
+      await recordAccessLog(logEntry);
+
+      onLoginSuccess(session);
+      setExecPassword('');
+    } catch (err) {
+      setExecLoginError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSubmittingExecLogin(false);
+    }
+  };
+
   // 1. Calculate Status Counts
   const completedCount = projects.filter(p => p.status === 'completed').length;
   const inProgressCount = projects.filter(p => p.status === 'in_progress').length;
@@ -56,6 +154,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // 2. Overall Progress calculation (%)
   const totalProgressSum = projects.reduce((acc, p) => acc + p.progressPercent, 0);
   const overallProgress = Math.round(totalProgressSum / totalProjects);
+
+  // 3. Projects waiting for Executive approval
+  const pendingExecutiveApprovals = projects.filter(
+    p => p.status === 'pending_exec' || p.workflowLevel === 3 || p.workflowLevel === 4
+  );
+
+  // 4. Certification Level Evaluation
+  const getHospitalCertificationTier = () => {
+    if (overallProgress >= 90 && completedCount >= totalProjects * 0.8) {
+      return {
+        tier: 'ระดับดีเยี่ยม (Excellence Level)',
+        badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        desc: 'ผ่านเกณฑ์มาตรฐานครบ 9 หมวด และมีการขับเคลื่อนเชิงนวัตกรรมสิ่งแวดล้อม'
+      };
+    } else if (overallProgress >= 75) {
+      return {
+        tier: 'ระดับดีมาก (Advanced Level)',
+        badge: 'bg-teal-100 text-teal-800 border-teal-300',
+        desc: 'ผ่านเกณฑ์มาตรฐานพื้นฐานครบถ้วน มีหลักฐานเชิงประจักษ์ชัดเจน'
+      };
+    } else if (overallProgress >= 60) {
+      return {
+        tier: 'ระดับดี (Standard Level)',
+        badge: 'bg-amber-100 text-amber-800 border-amber-300',
+        desc: 'ผ่านเกณฑ์มาตรฐานจำเป็น กำลังพัฒนาสู่เกณฑ์ขั้นสูง'
+      };
+    }
+    return {
+      tier: 'ระดับพัฒนาสู่มาตรฐาน (Developing Level)',
+      badge: 'bg-slate-100 text-slate-700 border-slate-300',
+      desc: 'กำลังขับเคลื่อนกิจกรรมตามแผนงานและรวบรวมหลักฐานเชิงประจักษ์'
+    };
+  };
+
+  const certTier = getHospitalCertificationTier();
 
   // 3. Category Progress breakdown
   const categoryStats = categories.map(cat => {
@@ -122,6 +255,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ภาพรวมความก้าวหน้าตามเกณฑ์ 9 หมวดมาตรฐาน ยึดหลักฐานเชิงประจักษ์ (Evidence-Based) 
               และระบบลำดับขั้นการรับรอง Workflow 5 ระดับ
             </p>
+
+            {/* Certification Tier Indicator */}
+            <div className="pt-1 flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-emerald-200">เกณฑ์ประเมิน รพ. ปัจจุบัน:</span>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${certTier.badge}`}>
+                <Award className="w-3.5 h-3.5" />
+                <span>{certTier.tier}</span>
+              </span>
+            </div>
           </div>
 
           {/* Overall Progress Gauge Widget */}
@@ -164,6 +306,252 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* EXECUTIVE SIGN-IN / COMMAND BANNER */}
+      {isExecutiveUser ? (
+        <div className="bg-emerald-900/90 text-white rounded-2xl p-4 sm:p-5 border border-emerald-700/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-700/80 border border-emerald-500 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
+              🏛️
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                  ยืนยันสิทธิ์ผู้บริหารแล้ว (Executive Verified)
+                </span>
+                <span className="px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-emerald-500/30 border border-emerald-400/40 text-emerald-200">
+                  {currentSession.level === 'admin' ? 'Super Admin' : `ระดับ ${currentSession.level}`}
+                </span>
+              </div>
+              <div className="text-sm sm:text-base font-bold text-white">
+                {currentSession.userName} — {currentSession.levelLabel}
+              </div>
+              <div className="text-xs text-emerald-200/80 mt-0.5">
+                ท่านได้รับสิทธิ์ลงนามอนุมัติคำสั่งการระดับ รพ. และรับรองผลการตรวจประเมิน GCH
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {pendingExecutiveApprovals.length > 0 && (
+              <span className="px-3 py-1 rounded-lg bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>รอผู้บริหารอนุมัติ {pendingExecutiveApprovals.length} รายการ</span>
+              </span>
+            )}
+            {onOpenLoginModal && (
+              <button
+                onClick={onOpenLoginModal}
+                className="px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-medium border border-emerald-600 transition-colors"
+              >
+                สลับผู้ใช้งาน
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-amber-50 via-emerald-50/70 to-teal-50/70 rounded-2xl p-5 border border-amber-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-base shadow-2xs shrink-0">
+                🏛️
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>ศูนย์ลงชื่อเข้าใช้งานสำหรับผู้บริหาร (Executive Access Portal)</span>
+                  <span className="text-[11px] font-normal text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-300">
+                    ยืนยันตัวตนด้วยรหัสผ่าน
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  สำหรับผู้อำนวยการ รพ., รอง ผอ., หัวหน้ากลุ่มงาน และกรรมการตรวจประเมิน GCH เพื่อปลดล็อกสิทธิ์ลงนามอนุมัติ
+                </p>
+              </div>
+            </div>
+
+            {onOpenLoginModal && (
+              <button
+                onClick={onOpenLoginModal}
+                className="text-xs text-emerald-800 hover:text-emerald-950 font-semibold underline underline-offset-2 shrink-0"
+              >
+                เปิดหน้าต่างเข้าสู่ระบบเต็มรูปแบบ
+              </button>
+            )}
+          </div>
+
+          {/* Quick Inline Executive Login Form */}
+          <form onSubmit={handleExecLogin} className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-2xs space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              
+              {/* Level Selector */}
+              <div className="sm:col-span-4 space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  เลือกระดับผู้บริหาร:
+                </label>
+                <select
+                  value={execLevel}
+                  onChange={(e) => {
+                    setExecLevel(e.target.value as AccessLevel);
+                    setExecPassword('');
+                    setExecLoginError('');
+                  }}
+                  className="w-full text-xs rounded-lg border border-slate-300 p-2 bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium"
+                >
+                  <option value="3">ระดับ 3: ผู้บริหารขั้นต้น (หน.กลุ่มงาน/ฝ่าย)</option>
+                  <option value="4">ระดับ 4: ผู้บริหารขั้นสูง (ผอ./รอง ผอ. รพ.)</option>
+                  <option value="5">ระดับ 5: ผู้ประเมินภายนอก (กรรมการ GCH)</option>
+                </select>
+              </div>
+
+              {/* User Selection or Name */}
+              <div className="sm:col-span-4 space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  ชื่อผู้บริหาร:
+                </label>
+                <div className="flex gap-1.5">
+                  <select
+                    value={execUserId}
+                    onChange={(e) => {
+                      setExecUserId(e.target.value);
+                      if (e.target.value) setExecCustomName('');
+                    }}
+                    className="w-full text-xs rounded-lg border border-slate-300 p-2 bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="">-- เลือกจากรายชื่อ --</option>
+                    {authorizedUsers
+                      .filter(u => u.allowedLevels.includes(execLevel) || u.allowedLevels.some(l => ['3', '4', '5'].includes(l)))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.position})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="sm:col-span-4 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    รหัสผ่าน:
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    🔒 รหัสความปลอดภัย
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showExecPassword ? 'text' : 'password'}
+                      value={execPassword}
+                      onChange={(e) => {
+                        setExecPassword(e.target.value);
+                        setExecLoginError('');
+                      }}
+                      placeholder="กรอกรหัสผ่าน"
+                      className="w-full text-xs font-mono rounded-lg border border-slate-300 p-2 pl-7 pr-8 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                    <KeyRound className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5" />
+                    <button
+                      type="button"
+                      onClick={() => setShowExecPassword(!showExecPassword)}
+                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showExecPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingExecLogin}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white text-xs font-bold rounded-lg shadow-xs hover:shadow transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>ยืนยันตัวตน</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Custom Name fallback if not in dropdown */}
+            {!execUserId && (
+              <div className="text-[11px] text-slate-500 flex items-center gap-2 pt-1 border-t border-slate-100">
+                <span>หากไม่มีชื่อในรายการ:</span>
+                <input
+                  type="text"
+                  value={execCustomName}
+                  onChange={(e) => setExecCustomName(e.target.value)}
+                  placeholder="พิมพ์ชื่อ-สกุลผู้บริหาร เช่น นพ.สมศักดิ์ วงศ์สวัสดิ์"
+                  className="text-xs rounded-md border border-slate-200 px-2 py-1 max-w-xs focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            )}
+
+            {execLoginError && (
+              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{execLoginError}</span>
+              </div>
+            )}
+          </form>
+        </div>
+      )}
+
+      {/* PENDING EXECUTIVE APPROVAL QUEUE (If any projects waiting) */}
+      {pendingExecutiveApprovals.length > 0 && (
+        <div className="bg-amber-50/80 rounded-2xl border border-amber-200 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                !
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  คิวงานรอการลงนาม/รับรองจากผู้บริหาร ({pendingExecutiveApprovals.length} รายการ)
+                </h3>
+                <p className="text-xs text-amber-800">
+                  โครงการที่ผ่านการตรวจรับรองเบื้องต้นแล้ว และรอหัวหน้าฝ่าย/ผอ. ลงนามรับรองผล
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigateToTab('projects', 'pending_exec')}
+              className="text-xs font-semibold text-amber-900 hover:text-amber-950 flex items-center gap-1"
+            >
+              <span>ดูคิวงานทั้งหมด</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {pendingExecutiveApprovals.slice(0, 3).map((p) => {
+              const workflow = getWorkflowLevelInfo(p.workflowLevel);
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => onSelectProject(p)}
+                  className="bg-white rounded-xl p-3.5 border border-amber-200 hover:border-amber-400 hover:shadow-sm cursor-pointer transition-all space-y-2 group"
+                >
+                  <div className="flex items-center justify-between gap-1 text-[11px]">
+                    <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                      {workflow.shortTitle}
+                    </span>
+                    <span className="text-slate-500">{p.department}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-2">
+                    {p.name}
+                  </h4>
+                  <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>ผู้รับผิดชอบ: {p.responsiblePerson}</span>
+                    <span className="font-bold text-emerald-700">ก้าวหน้า {p.progressPercent}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 1. Status Cards Grid (6 Status Types per requirement) */}
       <div>

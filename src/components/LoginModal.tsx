@@ -283,19 +283,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             </div>
 
-            {/* Quick reference guide for convenience */}
+            {/* Security Notice */}
             <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
               <span className="flex items-center gap-1">
                 <Info className="w-3 h-3 text-emerald-600" />
                 สิทธิจะถูกบันทึกประวัติลงสู่ระบบหลังบ้าน
               </span>
               <span className="text-slate-400 text-[10px]">
-                {selectedLevel === '1' && 'รหัส: 01'}
-                {selectedLevel === '2' && 'รหัส: 012'}
-                {selectedLevel === '3' && 'รหัส: 0123'}
-                {selectedLevel === '4' && 'รหัส: 01234'}
-                {selectedLevel === '5' && 'รหัส: 012345'}
-                {selectedLevel === 'admin' && 'รหัส: 353909'}
+                🔒 รักษาความปลอดภัยตามมาตรฐานความมั่นคงปลอดภัยสารสนเทศ
               </span>
             </div>
           </div>

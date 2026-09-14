@@ -26,6 +26,7 @@ import { ProjectsView } from './components/ProjectsView';
 import { EvidenceMatrixView } from './components/EvidenceMatrixView';
 import { MeetingTrackingView } from './components/MeetingTrackingView';
 import { AdminConsoleView } from './components/AdminConsoleView';
+import { LandingPortalView } from './components/LandingPortalView';
 import { ProjectDetailModal } from './components/ProjectDetailModal';
 import { NewProjectModal } from './components/NewProjectModal';
 import { NewMeetingModal } from './components/NewMeetingModal';
@@ -80,7 +81,15 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Navigation & Role States
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('gch_user_session');
+      if (saved) return 'dashboard';
+    } catch (e) {
+      // ignore
+    }
+    return 'portal';
+  });
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
     try {
       const saved = localStorage.getItem('gch_user_session');
@@ -483,6 +492,26 @@ export default function App() {
       {/* Main Viewport Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
+        {/* TAB 0: LANDING PORTAL & REGISTRATION (FIRST PAGE) */}
+        {currentTab === 'portal' && (
+          <LandingPortalView
+            authorizedUsers={authorizedUsers}
+            onLoginSuccess={(session) => {
+              handleLoginSuccess(session);
+              setCurrentTab('dashboard');
+            }}
+            onRegisterUser={async (newUser, session) => {
+              await handleSaveAuthorizedUser(newUser);
+              handleLoginSuccess(session);
+              setCurrentTab('dashboard');
+            }}
+            onContinueAsGuest={() => setCurrentTab('dashboard')}
+            projects={projects}
+            meetings={meetings}
+            categories={categories}
+          />
+        )}
+
         {/* TAB 1: EXECUTIVE DASHBOARD */}
         {currentTab === 'dashboard' && (
           <DashboardView
@@ -490,6 +519,10 @@ export default function App() {
             categories={categories}
             meetings={meetings}
             activeRole={activeRole}
+            currentSession={currentSession}
+            authorizedUsers={authorizedUsers}
+            onLoginSuccess={handleLoginSuccess}
+            onOpenLoginModal={() => setShowLoginModal(true)}
             onSelectProject={(p) => setSelectedProject(p)}
             onSelectCategory={(catId) => {
               setSelectedCategoryId(catId);
@@ -552,24 +585,55 @@ export default function App() {
           />
         )}
 
-        {/* TAB 6: ADMIN CONTROL CONSOLE & ACCESS REGISTRY */}
+        {/* TAB 6: ADMIN CONTROL CONSOLE & ACCESS REGISTRY (Restricted to Admin Only) */}
         {currentTab === 'admin' && (
-          <AdminConsoleView
-            accessLogs={accessLogs}
-            authorizedUsers={authorizedUsers}
-            projects={projects}
-            meetings={meetings}
-            categories={categories}
-            isAdmin={isAdminActive}
-            onSaveAuthorizedUser={handleSaveAuthorizedUser}
-            onDeleteAuthorizedUser={handleDeleteAuthorizedUser}
-            onDeleteAccessLog={handleDeleteAccessLog}
-            onClearAccessLogs={handleClearAccessLogs}
-            onEditProject={(proj) => setEditingProjectForAdmin(proj)}
-            onDeleteProject={handleDeleteProject}
-            onDeleteMeeting={handleDeleteMeeting}
-            onOpenLoginModal={() => setShowLoginModal(true)}
-          />
+          currentSession?.level === 'admin' ? (
+            <AdminConsoleView
+              accessLogs={accessLogs}
+              authorizedUsers={authorizedUsers}
+              projects={projects}
+              meetings={meetings}
+              categories={categories}
+              isAdmin={isAdminActive}
+              onSaveAuthorizedUser={handleSaveAuthorizedUser}
+              onDeleteAuthorizedUser={handleDeleteAuthorizedUser}
+              onDeleteAccessLog={handleDeleteAccessLog}
+              onClearAccessLogs={handleClearAccessLogs}
+              onEditProject={(proj) => setEditingProjectForAdmin(proj)}
+              onDeleteProject={handleDeleteProject}
+              onDeleteMeeting={handleDeleteMeeting}
+              onOpenLoginModal={() => setShowLoginModal(true)}
+            />
+          ) : (
+            <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center max-w-lg mx-auto shadow-sm space-y-4 animate-in fade-in">
+              <div className="w-14 h-14 bg-rose-100 text-rose-700 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+                🔒
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900">
+                  สงวนสิทธิ์เฉพาะผู้ดูแลระบบสูงสุด (Admin Access Only)
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  หน้าควบคุมระบบและจัดการทะเบียนผู้ใช้งาน ถูกจำกัดสิทธิ์เฉพาะ Super Admin 
+                  ผู้ใช้งานระดับ 1-5 หรือผู้สังเกตการณ์ไม่ได้รับอนุญาตให้มองเห็นหรือเข้าถึงส่วนนี้
+                </p>
+              </div>
+              <div className="pt-2 flex justify-center gap-3">
+                <button
+                  onClick={() => setCurrentTab('dashboard')}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                >
+                  กลับหน้า Dashboard ผู้บริหาร
+                </button>
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors"
+                >
+                  เข้าสู่ระบบด้วยรหัสผ่าน Admin
+                </button>
+              </div>
+            </div>
+          )
         )}
 
       </main>

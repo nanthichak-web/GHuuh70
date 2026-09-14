@@ -1038,7 +1038,7 @@ export const INITIAL_AUTHORIZED_USERS: AuthorizedUser[] = [
     allowedLevels: ['admin', '1', '2', '3', '4', '5'],
     createdAt: '1 ก.ค. 2569',
     status: 'active',
-    note: 'ผู้ดูแลระบบสูงสุด สิทธิ์จัดการข้อมูลทั้งหมด รหัสผ่าน 353909'
+    note: 'ผู้ดูแลระบบสูงสุด สิทธิ์จัดการข้อมูลและคอนฟิกูเรชันทั้งหมด'
   }
 ];
 
